@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,7 +26,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** Interface Adapter de entrada: traduce HTTP a llamadas a los casos de uso. */
+/**
+ * Interface Adapter de entrada: traduce HTTP a llamadas a los casos de uso.
+ *
+ * El usuario que origina cada cambio llega en la cabecera X-Usuario. Este
+ * laboratorio no tiene autenticación, así que es un dato declarado; en
+ * producción vendría del usuario autenticado (por ejemplo, Spring Security).
+ */
 @RestController
 @RequestMapping("/api/hallazgos")
 public class HallazgoController {
@@ -35,6 +42,8 @@ public class HallazgoController {
     private final CerrarHallazgoUseCase cerrarUseCase;
     private final ReabrirHallazgoUseCase reabrirUseCase;
     private final ConsultarHallazgoUseCase consultarUseCase;
+
+    static final String CABECERA_USUARIO = "X-Usuario";
 
     public HallazgoController(RegistrarHallazgoUseCase registrarUseCase,
                               IniciarRemediacionUseCase iniciarRemediacionUseCase,
@@ -50,28 +59,32 @@ public class HallazgoController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Map<String, String> registrar(@Valid @RequestBody RegistrarHallazgoRequest req) {
+    public Map<String, String> registrar(@Valid @RequestBody RegistrarHallazgoRequest req,
+                                         @RequestHeader(name = CABECERA_USUARIO, defaultValue = "anonimo") String usuario) {
         HallazgoId id = registrarUseCase.ejecutar(
-                req.titulo(), req.descripcion(), req.areaResponsable(), req.severidad(), req.fechaDeteccion());
+                req.titulo(), req.descripcion(), req.areaResponsable(), req.severidad(), req.fechaDeteccion(), usuario);
         return Map.of("hallazgoId", id.toString());
     }
 
     @PatchMapping("/{id}/iniciar-remediacion")
     public Map<String, String> iniciarRemediacion(@PathVariable String id,
-                                                  @Valid @RequestBody IniciarRemediacionRequest req) {
-        iniciarRemediacionUseCase.ejecutar(aHallazgoId(id), req.responsable(), req.fechaLimite(), req.notas());
+                                                  @Valid @RequestBody IniciarRemediacionRequest req,
+                                                  @RequestHeader(name = CABECERA_USUARIO, defaultValue = "anonimo") String usuario) {
+        iniciarRemediacionUseCase.ejecutar(aHallazgoId(id), req.responsable(), req.fechaLimite(), req.notas(), usuario);
         return Map.of("estado", "EN_REMEDIACION");
     }
 
     @PatchMapping("/{id}/cerrar")
-    public Map<String, String> cerrar(@PathVariable String id) {
-        cerrarUseCase.ejecutar(aHallazgoId(id));
+    public Map<String, String> cerrar(@PathVariable String id,
+                                      @RequestHeader(name = CABECERA_USUARIO, defaultValue = "anonimo") String usuario) {
+        cerrarUseCase.ejecutar(aHallazgoId(id), usuario);
         return Map.of("estado", "CERRADO");
     }
 
     @PatchMapping("/{id}/reabrir")
-    public Map<String, String> reabrir(@PathVariable String id, @Valid @RequestBody ReabrirRequest req) {
-        reabrirUseCase.ejecutar(aHallazgoId(id), req.motivo());
+    public Map<String, String> reabrir(@PathVariable String id, @Valid @RequestBody ReabrirRequest req,
+                                       @RequestHeader(name = CABECERA_USUARIO, defaultValue = "anonimo") String usuario) {
+        reabrirUseCase.ejecutar(aHallazgoId(id), req.motivo(), usuario);
         return Map.of("estado", "REABIERTO");
     }
 
